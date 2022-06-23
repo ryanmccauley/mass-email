@@ -1,7 +1,14 @@
 [
   {
     "name": "Ryan McCauley",
+    "formattedName": "Ryan McCauley",
     "email": "ryan@test.com",
+    "phone": "8001234567"
+  },
+  {
+    "name": "Test Person",
+    "formattedName": "Dr. Test Person",
+    "email": "test@test.com",
     "phone": "8001234567"
   }
 ]
