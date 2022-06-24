@@ -3,6 +3,8 @@ use std::fmt::{Display, Formatter};
 use std::io::Read;
 use std::fs;
 use serde::{Serialize, Deserialize};
+use dotenv;
+use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Contact {
@@ -44,12 +46,18 @@ struct EmailSendProperties {
     body: String,
 }
 
-fn send_email(props: EmailSendProperties) -> Result<(), Box<dyn std::error::Error>> {
-    println!("{}, {}, {}, {}", props.to, props.from, props.subject, props.body);
+async fn send_email(mailer: &AsyncSmtpTransport<Tokio1Executor>, props: EmailSendProperties) -> Result<(), Box<dyn std::error::Error>> {
+    let email = Message::builder()
+        .from(props.from.parse()?)
+        .to(props.to.parse()?)
+        .subject(props.subject.parse())
+        .body(props.body.parse())?;
+    mailer.send(email).await?;
     Ok(())
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>>{
     let contacts = match load_contacts() {
         Some(contacts) => {
             println!("Successfully loaded {} contacts from {}...", contacts.len(), CONTACTS_FILE_NAME);
@@ -63,14 +71,19 @@ fn main() {
         None => panic!("Error reading email contents."),
     };
 
+    let creds = Credentials::new(dotenv::var("SMTP_USERNAME").unwrap(), dotenv::var("SMTP_PASSWORD").unwrap());
+    let mailer = AsyncSmtpTransport::<Tokio1Executor>::relay(dotenv::var("SMTP_CONN").unwrap().as_str())?
+        .credentials(creds)
+        .build();
+
     for contact in contacts {
         let formatted_contents = email_contents.replace("{name}", &contact.name);
-        match send_email(EmailSendProperties {
+        match send_email(&mailer, EmailSendProperties {
             to: contact.email.clone(),
             from: String::from("ryanmcly@gmail.com"),
             subject: String::from("Test Subject"),
-            body: formatted_contents
-        }) {
+            body: formatted_contents.to_string(),
+        }).await {
             Ok(_) => {
                 println!("Email sent to {}", contact.email)
             },
@@ -79,4 +92,6 @@ fn main() {
             }
         }
     }
+
+    Ok(())
 }
